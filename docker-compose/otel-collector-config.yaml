@@ -1,0 +1,42 @@
+# OpenTelemetry Collector config that receives OTLP and exports to Zipkin
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+
+processors:
+  batch:
+    send_batch_size: 1024
+    timeout: 5s
+
+exporters:
+  jaeger/2:
+    endpoint: jaeger-collector:14250
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: "0.0.0.0:9464"
+    send_timestamps: true
+    metric_expiration: 180m
+
+
+  logging:
+    logLevel: debug
+
+extensions:
+  zpages: {}
+
+service:
+  extensions: [zpages]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [jaeger/2]
+    metrics:
+      receivers: [otlp]
+      exporters: [prometheus,logging]
+      processors: [batch]

@@ -1,0 +1,74 @@
+version: '3.7'
+services:
+  otel:
+    image: otel/opentelemetry-collector-contrib
+    command: ["--config=/conf/otel-collector-config.yaml"]
+    privileged: true
+    ports:
+      - 4317:4317 # GRPC endpoint
+      - 4318:4318 # Http endpoint
+    volumes:
+      - ./otel-collector-config.yaml:/conf/otel-collector-config.yaml
+
+  jaeger-collector:
+    image: jaegertracing/jaeger-collector
+    command: ["--es.num-shards=1", "--es.num-replicas=0", "--es.server-urls=http://elasticsearch:9200", "--collector.zipkin.host-port=:9411"]
+    ports:
+      # - "14269"
+      # - "14268:14268"
+      - "14250"
+      #- "9411:9411"
+    environment:
+      - SPAN_STORAGE_TYPE=elasticsearch
+      - LOG_LEVEL=debug
+    restart: on-failure
+    depends_on:
+      - elasticsearch
+
+  jaeger-query:
+    image: jaegertracing/jaeger-query
+    command: ["--es.num-shards=1", "--es.num-replicas=0", "--es.server-urls=http://elasticsearch:9200"]
+    ports:
+      - "16686:16686"
+      - "16687"
+    environment:
+      - SPAN_STORAGE_TYPE=elasticsearch
+      - LOG_LEVEL=debug
+    restart: on-failure
+    depends_on:
+      - elasticsearch
+
+  jaeger-agent:
+    image: jaegertracing/jaeger-agent
+    command: ["--reporter.grpc.host-port=jaeger-collector:14250", "--reporter.grpc.retry.max=1000"]
+    #ports:
+      # - "5775:5775/udp"
+      # - "6831:6831/udp"
+      # - "6832:6832/udp"
+      # - "5778:5778"
+    environment:
+      - LOG_LEVEL=debug
+    restart: on-failure
+    depends_on:
+      - jaeger-collector
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:6.8.23
+    #image: docker.elastic.co/elasticsearch/elasticsearch-oss:8.4.1
+    environment:
+      - discovery.type=single-node
+    ports:
+      - "9200:9200/tcp"
+
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - 3000:3000
